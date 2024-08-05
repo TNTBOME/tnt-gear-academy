@@ -1,8 +1,7 @@
-use game_session::vec_u8_to_comma_separated_string;
+use game_session::*;
 use gstd::prelude::*;
 use gtest::{Log, Program, RunResult, System};
-
-use session_io::{GameOver, ProgramStatus, UserAction, UserEvent, UserStatus};
+use session_io::*;
 
 static USER_0: u64 = 100;
 static USER_1: u64 = 101;
@@ -133,11 +132,11 @@ fn guess_word(session: &Program, user: u64, word: &str, user_status: UserStatus,
 
     for (i, (a, b)) in answer.chars().zip(word.chars()).enumerate() {
         if a == b {
-            // 如果同一索引位置，字符相同，则将索引存入 matched_indices
+            // If the characters match at the same index, store the index in matched_indices
             matched_indices.push(i as u8);
         } else if answer.contains(b) {
-            // 如果字符不同，但是待猜的单词包含用户输入的字符，
-            // 则将索引存入 key_indices
+            // If characters do not match, but the word contains the user's input character,
+            // store the index in key_indices
             key_indices.push(i as u8);
         }
     }
