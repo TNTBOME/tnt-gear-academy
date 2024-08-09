@@ -344,21 +344,9 @@ async fn update_user_status_and_reply(
     }
 }
 
-static mut USER_TRIES_MAP: Option<HashMap<ActorId, u32>> = None;
-static mut USER_CORRECT_POSITION_MAP: Option<HashMap<ActorId, Vec<bool>>> = None;
-static mut USER_CONTAINED_IN_WORD_MAP: Option<HashMap<ActorId, Vec<bool>>> = None;
-static mut USER_LAST_EVENT: Option<HashMap<ActorId, UserEvent>> = None;
-static mut USER_STATUS_MAP_MUTEX: Option<Arc<Mutex<HashMap<ActorId, UserStatus>>>> = None;
-static mut USER_STATUS_MAP: Option<HashMap<ActorId, UserStatus>> = None;
+
 
 #[gstd::async_main]
 async fn init() {
-    unsafe {
-        USER_TRIES_MAP = Some(HashMap::new());
-        USER_CORRECT_POSITION_MAP = Some(HashMap::new());
-        USER_CONTAINED_IN_WORD_MAP = Some(HashMap::new());
-        USER_LAST_EVENT = Some(HashMap::new());
-        USER_STATUS_MAP_MUTEX = Some(Arc::new(Mutex::new(HashMap::new())));
-        USER_STATUS_MAP = Some(HashMap::new());
-    }
+    unsafe {USER_ID = Some(HashMap::new());}
 }
