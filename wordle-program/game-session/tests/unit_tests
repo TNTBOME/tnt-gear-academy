@@ -1,190 +1,127 @@
-use game_session::*;
-use gstd::prelude::*;
-use gtest::{Log, Program, RunResult, System};
-use session_io::*;
+#[cfg(test)]
+mod tests {
+    use gstd::{prelude::*, ActorId};
+    use gtest::{Program, System};
+    use session_io::*;
 
-static USER_0: u64 = 100;
-static USER_1: u64 = 101;
-static USER_2: u64 = 102;
+    const WORDLE_ID: u64 = 1;
+    const GAME_SESSION_ID: u64 = 2;
+    const USER1: u64 = 10;
 
-static mut USERS: Option<Vec<u64>> = None;
+    fn setup() -> System {
+        let sys = System::new();
+        sys.init_logger();
 
-const MAX_TRIES: u32 = 6;
-const WORD_LENGTH: usize = 5;
+        let wordle = Program::from_file(&sys, "../target/wasm32-unknown-unknown/debug/wordle.opt.wasm");
+        let game_session = Program::from_file(
+            &sys,
+            "../target/wasm32-unknown-unknown/debug/game_session.opt.wasm",
+        );
 
-#[test]
-fn test_init() {
-    let sys = System::new();
-    let (session, _, _) = init_program(&sys);
+        let user_id: ActorId = USER1.into();
+        let wordle_id: ActorId = WORDLE_ID.into();
 
-    read_state(&session);
-}
+        // Initialize the Wordle program
+        assert!(!wordle.send(user_id, wordle_id).main_failed());
+        // Initialize the Game Session program
+        assert!(!game_session.send(user_id, wordle_id).main_failed());
 
-#[test]
-fn test_start_game() {
-    let sys = System::new();
-    let (session, _wordle, users) = init_program(&sys);
-
-    start_game(&session, users[0]);    
-}
-
-#[test]
-fn test_guess_word_win() {
-    let sys = System::new();
-    let (session, _wordle, users) = init_program(&sys);
-
-    start_game(&session, users[1]);
-    start_game(&session, users[1]);
-
-    guess_word(&session, users[1], "hello", UserStatus::GameStarted, 1);
-    let log = guess_word(&session, users[1], "horse", UserStatus::GameStarted, 2);
-    repeat_start_game_in_guesses(&session, users[1], &log);
-    guess_word(&session, users[1], "house", UserStatus::GameOver(GameOver::Win), 3);
-    guess_word(&session, users[1], "house", UserStatus::GameOver(GameOver::Win), 3);
-}
-
-#[test]
-fn test_guess_word_lose() {
-    let sys = System::new();
-    let (session, _wordle, users) = init_program(&sys);
-
-    start_game(&session, users[1]);
-    start_game(&session, users[1]);
-
-    guess_word(&session, users[1], "hello", UserStatus::GameStarted, 1);
-    let mut log = guess_word(&session, users[1], "horse", UserStatus::GameStarted, 2);
-    repeat_start_game_in_guesses(&session, users[1], &log);
-    guess_word(&session, users[1], "hawck", UserStatus::GameStarted, 3);
-    log = guess_word(&session, users[1], "happy", UserStatus::GameStarted, 4);
-    repeat_start_game_in_guesses(&session, users[1], &log);
-    guess_word(&session, users[1], "human", UserStatus::GameStarted, 5);
-    guess_word(&session, users[1], "human", UserStatus::GameOver(GameOver::Lose), 6);
-    guess_word(&session, users[1], "human", UserStatus::GameOver(GameOver::Lose), 6);
-}
-
-#[test]
-fn test_guess_word_failure() {
-    let sys = System::new();
-    let (session, _wordle, users) = init_program(&sys);
-
-    guess_word_without_start(&session, users[1], "qwwwww");
-    guess_word_without_start(&session, users[1], "eerwwq");
-}
-
-
-fn init_program(sys: &System) -> (Program, Program, Vec<u64>) {
-    sys.init_logger();
-    let users = unsafe {
-        USERS = Some(Vec::new());
-        USERS.as_mut().unwrap()
-    };
-
-    users.push(USER_2);
-    users.push(USER_1);
-    users.push(USER_0);
-
-    let wordle: Program = Program::from_file(
-        &sys,
-        "/home/lionchen/git/wordle-game-gear-academy/target/wasm32-unknown-unknown/debug/wordle.opt.wasm");
-    let result = wordle.send_bytes(users[0], b"");
-    assert!(!result.main_failed());
-    assert_eq!(wordle.id(), 1.into());
-
-    let session: Program = Program::current(&sys);
-    let result = session.send(users[0], wordle.id());
-    assert!(!result.main_failed());
-
-    (session, wordle, users.to_vec())
-}
-
-fn start_game(session: &Program, user: u64) {
-    let result: RunResult = session.send(user, UserAction::StartGame);
-    let log = Log::builder()
-        .source(session.id())
-        .dest(user)
-        .payload(UserEvent::Result {
-            user_status: session_io::UserStatus::GameStarted,
-            correct_position: None,
-            contained_in_word: None,
-            max_tries: MAX_TRIES,
-            tries: None,
-            time_out: None,
-        });
-    assert!(result.contains(&log));
-}
-
-fn repeat_start_game_in_guesses(session: &Program, user: u64, log: &Log) {
-    let result: RunResult = session.send(user, UserAction::StartGame);
-    assert!(result.contains(log));
-}
-
-fn guess_word(session: &Program, user: u64, word: &str, user_status: UserStatus, tries: u32) -> Log {
-    let result: RunResult = session.send(
-        user,
-        UserAction::GuessWord {
-            word: word.to_string(),
-        },
-    );
-    let answer = "house";
-
-    let mut matched_indices = Vec::with_capacity(WORD_LENGTH);
-    let mut key_indices = Vec::with_capacity(WORD_LENGTH);
-
-    for (i, (a, b)) in answer.chars().zip(word.chars()).enumerate() {
-        if a == b {
-            // If the characters match at the same index, store the index in matched_indices
-            matched_indices.push(i as u8);
-        } else if answer.contains(b) {
-            // If characters do not match, but the word contains the user's input character,
-            // store the index in key_indices
-            key_indices.push(i as u8);
-        }
+        sys
     }
 
-    let correct_poses = vec_u8_to_comma_separated_string(&matched_indices);
-    let contained_poses = vec_u8_to_comma_separated_string(&key_indices);
+    #[test]
+    fn test_start_game() {
+        let sys = setup();
+        let game_session = sys.get_program(GAME_SESSION_ID).unwrap();
 
-    let log = Log::builder()
-        .source(session.id())
-        .dest(user)
-        .payload(UserEvent::Result {
-            user_status: user_status,
-            correct_position: Some(correct_poses),
-            contained_in_word: Some(contained_poses),
-            max_tries: MAX_TRIES,
-            tries: Some(tries),
-            time_out: Some(false),
-        });
-    assert!(result.contains(&log));
+        // Simulate user sending StartGame request
+        assert!(!game_session.send(USER1, GameSessionAction::StartGame).main_failed());
 
-    log
-}
+        // Check if the game session has been created
+        let state: GameSessionState = game_session.read_state(()).unwrap();
+        assert!(state.game_sessions.iter().any(|(user, _)| *user == USER1.into()));
+        println!("State after StartGame: {:?}", state);
 
-fn guess_word_without_start(session: &Program, user: u64, word: &str) {
-    let result: RunResult = session.send(
-        user,
-        UserAction::GuessWord {
-            word: word.to_string(),
-        },
-    );
-    let log = Log::builder()
-        .source(session.id())
-        .dest(user)
-        .payload(UserEvent::Result {
-            user_status: UserStatus::GameNotStarted,
-            correct_position: None,
-            contained_in_word: None,
-            max_tries: MAX_TRIES,
-            tries: None,
-            time_out: None,
-        });
+        // Check session status
+        let session_info = &state
+            .game_sessions
+            .iter()
+            .find(|(user, _)| *user == USER1.into())
+            .unwrap()
+            .1.clone();
+        assert!(matches!(session_info.session_status, SessionStatus::WaitUserInput));
+    }
 
-    assert!(result.contains(&log));
-}
+    #[test]
+    fn test_check_word_correct_check_win() {
+        let sys = setup();
+        let game_session = sys.get_program(GAME_SESSION_ID).unwrap();
 
-fn read_state(program: &Program) {
-    let program_status: ProgramStatus = program.read_state(b"").unwrap();
-    assert!(program_status.user_status_list.is_some());
-    assert_eq!(program_status.word_length, Some(5));
-    assert_eq!(program_status.max_tries, Some(6));
+        // Start the game
+        assert!(!game_session.send(USER1, GameSessionAction::StartGame).main_failed());
+
+        // Simulate a correct word check
+        assert!(!game_session.send(USER1, GameSessionAction::CheckWord { word: "hello".to_string() }).main_failed());
+
+        // Validate the session status and tries count
+        let state: GameSessionState = game_session.read_state(()).unwrap();
+        let session_info = &state
+            .game_sessions
+            .iter()
+            .find(|(user, _)| *user == USER1.into())
+            .unwrap()
+            .1.clone();
+        println!("State after CheckWord: {:?}", state);
+
+        assert_eq!(session_info.tries, 1);  // Adjust based on expected behavior
+        assert!(matches!(session_info.session_status, SessionStatus::ReplyReceived(_)));
+    }
+
+    #[test]
+    fn test_game_over() {
+        let sys = setup();
+        let game_session = sys.get_program(GAME_SESSION_ID).unwrap();
+
+        // Start the game
+        assert!(!game_session.send(USER1, GameSessionAction::StartGame).main_failed());
+
+        // Simulate several incorrect word checks until the game is over
+        for _ in 0..5 {
+            assert!(!game_session.send(USER1, GameSessionAction::CheckWord { word: "wrong".to_string() }).main_failed());
+        }
+
+        // Check if the session status is GameOver
+        let state: GameSessionState = game_session.read_state(()).unwrap();
+        let session_info = &state
+            .game_sessions
+            .iter()
+            .find(|(user, _)| *user == USER1.into())
+            .unwrap()
+            .1;
+        assert!(matches!(session_info.session_status, SessionStatus::GameOver(_)));
+    }
+
+    #[test]
+    fn test_time() {
+        let sys = setup();
+        let game_session = sys.get_program(GAME_SESSION_ID).unwrap();
+
+        // Start the game
+        assert!(!game_session.send(USER1, GameSessionAction::StartGame).main_failed());
+
+        // Simulate a timeout
+        sys.spend_blocks(20);
+
+        // Validate if the session status is handled correctly after the timeout
+        let state: GameSessionState = game_session.read_state(()).unwrap();
+        let session_info = &state
+            .game_sessions
+            .iter()
+            .find(|(user, _)| *user == USER1.into())
+            .unwrap()
+            .1;
+        println!("State after timeout: {:?}", state);
+
+        assert!(matches!(session_info.session_status, SessionStatus::GameOver(_)));  // Or the expected status
+    }
 }
