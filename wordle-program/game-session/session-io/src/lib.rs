@@ -1,72 +1,163 @@
 #![no_std]
 
 use gmeta::{In, InOut, Metadata, Out};
-use gstd::{string::String, vec::Vec, ActorId, Decode, Encode, TypeInfo};
+use gstd::{collections::HashMap, prelude::*, ActorId, MessageId};
 
-
-#[derive(Debug, Clone, Encode, Decode, TypeInfo, PartialEq, Eq)]
-pub enum UserAction {
-    StartGame,
-    GuessWord { word: String },
+// 定义 GameSession 的状态结构
+#[derive(Debug, Default, Clone, Encode, Decode, TypeInfo)]
+pub struct GameSessionState {
+    pub wordle_program_id: ActorId,
+    pub game_sessions: Vec<(ActorId, SessionInfo)>,
 }
+
+#[derive(Debug, Default, Clone, Encode, Decode, TypeInfo)]
+pub struct GameSessionInit {
+    pub wordle_program_id: ActorId,
+}
+
+impl GameSessionInit {
+    pub fn assert_valid(&self) {
+        assert!(
+            !self.wordle_program_id.is_zero(),
+            "Invalid wordle_program_id"
+        );
+    }
+}
+
+impl From<GameSessionInit> for GameSession {
+    fn from(game_session_init: GameSessionInit) -> Self {
+        Self {
+            wordle_program_id: game_session_init.wordle_program_id,
+            ..Default::default()
+        }
+    }
+}
+
 #[derive(Debug, Clone, Encode, Decode, TypeInfo)]
-pub enum UserEvent {
-    Result {
-        user_status: UserStatus,
-        correct_position: Option<String>,
-        contained_in_word: Option<String>,
-        max_tries: u32,
-        tries: Option<u32>,
-        time_out: Option<bool>,
+pub enum GameSessionAction {
+    StartGame,
+    CheckWord {
+        word: String,
+    },
+    CheckGameStatus {
+        user: ActorId,
+        session_id: MessageId,
     },
 }
+
 #[derive(Debug, Clone, Encode, Decode, TypeInfo)]
-pub struct CheckGameStatus {
-    pub user: ActorId,
-}
-#[derive(Debug, Clone, Encode, Decode, TypeInfo)]
-pub enum Action {
+pub enum WordleAction {
     StartGame { user: ActorId },
     CheckWord { user: ActorId, word: String },
 }
+
 #[derive(Debug, Clone, Encode, Decode, TypeInfo)]
-pub enum Event {
+pub enum GameSessionEvent {
+    StartSuccess,
+    CheckWordResult {
+        correct_positions: Vec<u8>,
+        contained_in_word: Vec<u8>,
+    },
+    GameOver(GameStatus),
+}
+
+// 定义游戏状态
+#[derive(Debug, Clone, Encode, Decode, TypeInfo)]
+pub enum GameStatus {
+    Win,
+    Lose,
+}
+
+#[derive(Debug, Clone, Encode, Decode, TypeInfo)]
+pub enum WordleEvent {
     GameStarted {
         user: ActorId,
     },
     WordChecked {
         user: ActorId,
-        correct_position: Vec<u8>,
+        correct_positions: Vec<u8>,
         contained_in_word: Vec<u8>,
     },
 }
-#[derive(Debug, Clone, Encode, Decode, TypeInfo, PartialEq, Eq)]
-pub enum UserStatus {
-    GameNotStarted,
-    GameStarted,
-    GameOver(GameOver),
-}
-#[derive(Debug, Clone, Encode, Decode, TypeInfo, PartialEq, Eq)]
-pub enum GameOver {
-    Win,
-    Lose,
-}
-#[derive(Debug, Clone, Encode, Decode, TypeInfo)]
-pub struct ProgramStatus {
-    pub user_status_list: Option<Vec<(ActorId, UserStatus)>>,
-    pub word_length: Option<u32>,
-    pub max_tries: Option<u32>,
-    pub max_blocks: Option<u32>,
-}
-pub struct SessionMetadata;
 
-impl Metadata for SessionMetadata {
-    type Init = In<ActorId>;
-    type Handle = InOut<UserAction, UserEvent>;
-    type Others = ();
+impl WordleEvent {
+    pub fn get_user(&self) -> &ActorId {
+        match self {
+            WordleEvent::GameStarted { user } => user,
+            WordleEvent::WordChecked { user, .. } => user,
+        }
+    }
+}
+
+// 从 WordleEvent 转换为 GameSessionEvent
+impl From<&WordleEvent> for GameSessionEvent {
+    fn from(wordle_event: &WordleEvent) -> Self {
+        match wordle_event {
+            WordleEvent::GameStarted { .. } => GameSessionEvent::StartSuccess,
+            WordleEvent::WordChecked {
+                correct_positions,
+                contained_in_word,
+                ..
+            } => GameSessionEvent::CheckWordResult {
+                correct_positions: correct_positions.clone(),
+                contained_in_word: contained_in_word.clone(),
+            },
+        }
+    }
+}
+
+// 定义会话状态
+#[derive(Default, Debug, Clone, Encode, Decode, TypeInfo)]
+pub enum SessionStatus {
+    #[default]
+    Init,
+    WaitUserInput,
+    WaitWordleStartReply,
+    WaitWordleCheckWordReply,
+    ReplyReceived(WordleEvent),
+    GameOver(GameStatus),
+}
+
+// 定义会话信息
+#[derive(Default, Debug, Clone, Encode, Decode, TypeInfo)]
+pub struct SessionInfo {
+    pub session_id: MessageId,
+    pub original_msg_id: MessageId,
+    pub send_to_wordle_msg_id: MessageId,
+    pub tries: u8,
+    pub session_status: SessionStatus,
+}
+
+// 定义游戏会话结构体
+#[derive(Default, Debug, Clone)]
+pub struct GameSession {
+    pub wordle_program_id: ActorId,
+    pub sessions: HashMap<ActorId, SessionInfo>,
+}
+
+// 从 GameSession 转换为 GameSessionState
+impl From<&GameSession> for GameSessionState {
+    fn from(game_session: &GameSession) -> Self {
+        Self {
+            wordle_program_id: game_session.wordle_program_id,
+            game_sessions: game_session
+                .sessions
+                .iter()
+                .map(|(k, v)| (*k, v.clone()))
+                .collect(),
+        }
+    }
+}
+
+pub struct GameSessionMetadata;
+
+impl Metadata for GameSessionMetadata {
+    type Init = In<GameSessionInit>;
+    type Handle = InOut<GameSessionAction, GameSessionEvent>;
     type Reply = ();
+    type Others = ();
     type Signal = ();
-    type State = Out<ProgramStatus>;
+    type State = Out<GameSessionState>;
 }
 
 
