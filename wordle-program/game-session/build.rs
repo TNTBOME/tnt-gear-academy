@@ -1,5 +1,5 @@
-use session_io::SessionMetadata;
+use session_io::GameSessionMetadata;
 
 fn main() {
-    gear_wasm_builder::build_with_metadata::<SessionMetadata>();
+    gear_wasm_builder::build_with_metadata::<GameSessionMetadata>();
 }
