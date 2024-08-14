@@ -3,7 +3,6 @@
 use gmeta::{In, InOut, Metadata, Out};
 use gstd::{collections::HashMap, prelude::*, ActorId, MessageId};
 
-// 定义 GameSession 的状态结构
 #[derive(Debug, Default, Clone, Encode, Decode, TypeInfo)]
 pub struct GameSessionState {
     pub wordle_program_id: ActorId,
@@ -61,7 +60,6 @@ pub enum GameSessionEvent {
     GameOver(GameStatus),
 }
 
-// 定义游戏状态
 #[derive(Debug, Clone, Encode, Decode, TypeInfo)]
 pub enum GameStatus {
     Win,
@@ -106,7 +104,6 @@ impl From<&WordleEvent> for GameSessionEvent {
     }
 }
 
-// 定义会话状态
 #[derive(Default, Debug, Clone, Encode, Decode, TypeInfo)]
 pub enum SessionStatus {
     #[default]
@@ -118,7 +115,6 @@ pub enum SessionStatus {
     GameOver(GameStatus),
 }
 
-// 定义会话信息
 #[derive(Default, Debug, Clone, Encode, Decode, TypeInfo)]
 pub struct SessionInfo {
     pub session_id: MessageId,
@@ -128,7 +124,6 @@ pub struct SessionInfo {
     pub session_status: SessionStatus,
 }
 
-// 定义游戏会话结构体
 #[derive(Default, Debug, Clone)]
 pub struct GameSession {
     pub wordle_program_id: ActorId,
