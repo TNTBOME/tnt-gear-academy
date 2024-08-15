@@ -53,7 +53,7 @@ mod tests {
     }
 
     #[test]
-    fn test_check_word_correct_check_win() {
+    fn test_win() {
         let sys = setup();
         let game_session = sys.get_program(GAME_SESSION_ID).unwrap();
 
